@@ -1,10 +1,12 @@
-from typing import List, Dict, Optional, Tuple
+from typing import List, Tuple, Self, Set, Optional
 import os
 import platform
 from pprint import pprint
 
 import torch
 from datasets import load_dataset
+
+from transformer.data.batch_base import DictionaryBatch
 
 
 # use ~/huggingface_cache for caching
@@ -24,7 +26,12 @@ class FullExcerptDataset(torch.utils.data.IterableDataset):
   END = "<END>"
   PAD = "<PAD>"
 
-  def __init__(self, *, batch_size: int, char_map_file: str, trunc_len: int = 500):
+  def __init__(
+    self, *, batch_size: int = 1, char_map_file: Optional[str] = None, trunc_len: int = 500
+  ):
+    if char_map_file is None:
+      this_file_directory = os.path.dirname(os.path.realpath(__file__))
+      char_map_file = os.path.join(this_file_directory, "character_map.txt")
     self.batch_size = batch_size
     self.ds = None
     self.trunc_len = trunc_len
@@ -39,30 +46,30 @@ class FullExcerptDataset(torch.utils.data.IterableDataset):
     print("Character mapping loaded.")
 
   @property
-  def vocab_size(self):
+  def vocab_size(self) -> int:
     return len(self.tokens)
 
   @property
-  def oov_token(self):
+  def oov_token(self) -> int:
     return self.token_to_idx[self.OOV]
 
   @property
-  def start_token(self):
+  def start_token(self) -> int:
     return self.token_to_idx[self.START]
 
   @property
-  def end_token(self):
+  def end_token(self) -> int:
     return self.token_to_idx[self.END]
 
   @property
-  def pad_token(self):
+  def pad_token(self) -> int:
     return self.token_to_idx[self.PAD]
 
   @property
-  def non_text_tokens(self):
+  def non_text_tokens(self) -> Set[int]:
     return {self.start_token, self.end_token, self.oov_token, self.pad_token}
 
-  def __iter__(self):
+  def __iter__(self) -> Self:
     return self
 
   def chars_to_tokens(self, chars: List[str]) -> List[int]:
@@ -87,7 +94,7 @@ class FullExcerptDataset(torch.utils.data.IterableDataset):
 
     return torch.tensor(batch, dtype=torch.long)
 
-  def __next__(self):
+  def __next__(self) -> DictionaryBatch:
     if self.ds is None:
       self.ds = load_dataset(
         "HuggingFaceFW/fineweb-edu",
@@ -102,7 +109,7 @@ class FullExcerptDataset(torch.utils.data.IterableDataset):
     batch = self.strings_to_batch(records, trunc_len=self.trunc_len)
 
     inputs, labels = input_label_split(batch)
-    return {"inputs": inputs, "labels": labels}
+    return DictionaryBatch({"inputs": inputs, "labels": labels})
 
   def tokens_to_string(self, tokens: torch.Tensor) -> str:
     # assuming 2D batch tensor
@@ -111,7 +118,7 @@ class FullExcerptDataset(torch.utils.data.IterableDataset):
       for row in tokens.tolist()
     ]
 
-  def to_dataloader(self) -> Dict[str, torch.Tensor]:
+  def to_dataloader(self) -> torch.utils.data.DataLoader:
     return torch.utils.data.DataLoader(self, batch_size=None)
 
 
@@ -120,6 +127,6 @@ if __name__ == "__main__":
   char_map_file = os.path.join(this_file_directory, "character_map.txt")
   ds = FullExcerptDataset(batch_size=5, char_map_file=char_map_file)
   for i, batch in enumerate(ds):
-    pprint(ds.tokens_to_string(batch))
+    pprint(ds.tokens_to_string(batch["inputs"]))
     if i > 3:
       break
