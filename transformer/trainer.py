@@ -4,7 +4,7 @@ import datetime
 import torch
 import torcheval.metrics
 
-from HobBeans.transformer.config_util import BaseConfig
+from HobBeans.transformer.config_base import BaseConfig
 
 
 LABEL_KEY = "labels"
