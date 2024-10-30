@@ -1,11 +1,14 @@
-from typing import Dict, Iterable
+from typing import Iterable
 
 try:
   from typing import Self
 except ImportError:
   from typing_extensions import Self
+
 import torch
 from torcheval.metrics import Metric
+
+from transformer.data.batch_base import DictionaryBatch
 
 
 class TopKAccuracy(Metric):
@@ -15,7 +18,7 @@ class TopKAccuracy(Metric):
     self._add_state("num_correct", default=torch.tensor(0, dtype=torch.float, device=self.device))
     self._add_state("num_total", default=torch.tensor(0, dtype=torch.float, device=self.device))
 
-  def update(self, preds: Dict[str, torch.Tensor]):
+  def update(self, preds: DictionaryBatch):
     y = preds["logits"]
     labels = preds["labels"]
     y = y.reshape(-1, y.size(-1))
@@ -43,7 +46,7 @@ class Loss(Metric):
     self._add_state("cumulative", default=torch.tensor(0, dtype=torch.float, device=self.device))
     self._add_state("count", default=torch.tensor(0, dtype=torch.float, device=self.device))
 
-  def update(self, preds: Dict[str, torch.Tensor]):
+  def update(self, preds: DictionaryBatch):
     loss = preds["loss"]
     self.cumulative += loss
     self.count += 1

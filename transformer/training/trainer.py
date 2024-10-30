@@ -4,7 +4,7 @@ import datetime
 import torch
 import torcheval.metrics
 
-from HobBeans.transformer.config_base import BaseConfig
+from transformer.configs.config_base import BaseConfig
 
 
 LABEL_KEY = "labels"
@@ -36,8 +36,7 @@ def input_label_split(x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
 
 def batch_to_device_iter_wrapper(ds_iter: torch.utils.data.IterableDataset, device: torch.device):
   for x in ds_iter:
-    x = {k: v.to(device) for k, v in x.items()}
-    yield x
+    yield x.to(device)
 
 
 class Trainer:

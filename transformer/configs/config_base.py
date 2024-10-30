@@ -25,6 +25,7 @@ class BaseConfig(pydantic.BaseModel):
       zf.writestr("config.json", self.json_dumps(**kwargs))
 
   def json_dump(self: Self, path: str, **kwargs) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     if path.endswith(".zip"):
       self.json_dump_zip(path, **kwargs)
     else:
