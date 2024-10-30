@@ -4,7 +4,7 @@ import math
 
 import torch
 
-from HobBeans.transformer.config_util import UnionLikeConfig, BaseConfig
+from HobBeans.transformer.config_base import UnionLikeConfig, BaseConfig
 from matplotlib import pyplot as plt
 
 

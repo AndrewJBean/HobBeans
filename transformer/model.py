@@ -1,13 +1,43 @@
-import signal
-import sys
-from typing import Tuple, Dict
-import datetime
-
+from typing import Dict, List
+import pydantic
 import torch
-from HobBeans.transformer.dataset import ExcerptDataset
-from HobBeans.transformer.config import ModelConfig
-from HobBeans.transformer.trainer import TrainerConfig, Trainer, input_label_split
-from HobBeans.transformer.metrics import TopKAccuracy, Loss
+
+
+class ModelAndLoss(torch.nn.Module):
+  def __init__(self, *, model: torch.nn.Module):
+    super().__init__()
+    self.model = model
+    self.loss = torch.nn.CrossEntropyLoss()
+
+  def forward(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    """
+    x:  
+      {
+        "inputs": (batch_size, sequence_length),
+        "labels": (batch_size, sequence_length),
+      }
+    Returns:
+      {
+        "logits": (batch_size, sequence_length, char_vocab_size),
+        "loss": torch.Tensor,
+        "labels": torch.Tensor,
+      }
+    """
+    output = self.model(x)
+    # logits: (batch_size, sequence_length, char_vocab_size)
+    logits = output["logits"]
+    # squash first 2 dimensions
+    y = logits.reshape(-1, logits.size(-1))
+    labels = x["labels"]
+    loss = self.loss(y, labels.flatten())
+    return {"loss": loss, "labels": labels, **output}
+
+
+class ModelConfig(pydantic.BaseModel):
+  char_embedding_dim: int
+  char_vocab_size: int
+  kernel_sizes: List[int]
+  out_sizes: List[int]
 
 
 class Model(torch.nn.Module):
@@ -61,75 +91,3 @@ class Model(torch.nn.Module):
     # permute back to (batch_size, num_chars, char_vocab_size)
     x = x.permute(0, 2, 1)
     return {"logits": x}
-
-
-class ModelAndLoss(torch.nn.Module):
-  def __init__(self, *, model: torch.nn.Module):
-    super().__init__()
-    self.model = model
-    self.loss = torch.nn.CrossEntropyLoss()
-
-  def forward(self, x: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
-    """
-    x: (batch_size, num_chars)
-    """
-    output = self.model(x)
-    # logits: (batch_size, num_chars-1, char_vocab_size)
-    logits = output["logits"]
-    # squash first 2 dimensions
-    y = logits.reshape(-1, logits.size(-1))
-    labels = x["labels"]
-    loss = self.loss(y, labels.flatten())
-    return {"loss": loss, "labels": labels, **output}
-
-
-def main():
-  device = torch.device("mps") if torch.backends.mps.is_available() else torch.device("cuda")
-
-  num_chars = 100
-  batch_size = 10
-  dataset = ExcerptDataset(
-    num_chars=num_chars,
-    batch_size=batch_size,
-    char_map_file="character_map.txt",
-  )
-
-  num_layers = 3
-  config = ModelConfig(
-    num_chars=dataset._num_chars,
-    char_embedding_dim=128,
-    char_vocab_size=dataset.vocab_size,
-    kernel_sizes=[5] * num_layers,
-    out_sizes=[256] * (num_layers - 1),
-  )
-  model = Model(config=config)
-  model_and_loss = ModelAndLoss(model=model)
-  optimizer = torch.optim.Adam(model_and_loss.parameters(), lr=0.001)
-  metrics = {"loss": Loss()}
-  metrics.update({f"accuracy(k={k})": TopKAccuracy(k=k) for k in [1, 2, 3]})
-
-  trainer_config = TrainerConfig(
-    num_steps=10000,
-    log_interval=100,
-    eval_interval=500,
-    eval_steps=100,
-  )
-  trainer = Trainer(
-    config=trainer_config,
-    model_and_loss=model_and_loss,
-    optimizer=optimizer,
-    metrics=metrics,
-    device=device,
-  )
-  trainer.train(dataset)
-
-
-# handle keyboard interrupt
-def signal_handler(sig, frame):
-  print("\nKeyboardInterrupt, exiting...")
-  sys.exit(0)
-
-
-if __name__ == "__main__":
-  signal.signal(signal.SIGINT, signal_handler)
-  main()

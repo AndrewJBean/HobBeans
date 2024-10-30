@@ -15,7 +15,7 @@ from HobBeans.transformer.transformer import (
   EncoderBlockConfig,
 )
 from HobBeans.transformer.model import ModelAndLoss
-from HobBeans.transformer.ds_no_trunc import FullExcerptDataset
+from HobBeans.transformer.dataset import FullExcerptDataset
 
 import torch
 
